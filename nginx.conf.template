@@ -1,0 +1,77 @@
+worker_processes auto;
+error_log /dev/stderr warn;
+pid /tmp/nginx.pid;
+
+events {
+    worker_connections 1024;
+}
+
+http {
+    access_log off;
+    server_tokens off;
+    client_max_body_size ${VELIX_MAX_BODY_SIZE};
+
+    map $http_upgrade $connection_upgrade {
+        default upgrade;
+        ''      close;
+    }
+
+    # Every request reaches this container from Railway's edge, so $remote_addr
+    # is always a 100.64.0.0/10 address and is the SAME for every caller on the
+    # internet. Keying a limiter on it would give the whole world one shared
+    # bucket. Railway REPLACES any inbound X-Forwarded-For, so the header holds
+    # the real client address and nothing a caller sends can forge it.
+    map $http_x_forwarded_for $velix_client {
+        default $http_x_forwarded_for;
+        ''      $remote_addr;
+    }
+
+    proxy_http_version 1.1;
+    proxy_read_timeout 3600s;
+    proxy_send_timeout 3600s;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection $connection_upgrade;
+
+    limit_req_zone $velix_client zone=velixauth:1m rate=${VELIX_AUTH_RATE};
+    limit_req_status 429;
+
+    upstream velix {
+        server 127.0.0.1:${HTTP_PORT};
+        keepalive 32;
+    }
+
+    server {
+        listen ${PORT} default_server;
+        listen [::]:${PORT} default_server;
+
+        # Workspace signup. Upstream has no switch for this — REGISTRATION_ENABLED
+        # appears in no lookup in the binary — so the gate lives here. With it
+        # closed the workspace created on first boot is the only one that can
+        # exist, and the deploy's own bootstrap bypasses this by calling
+        # 127.0.0.1 directly.
+        location = /v1/auth/register {
+            limit_req zone=velixauth burst=${VELIX_AUTH_BURST} nodelay;
+            set $registration_open "${VELIX_PUBLIC_REGISTRATION}";
+            default_type application/json;
+            if ($registration_open != "true") {
+                return 403 '{"success":false,"error":{"code":"REGISTRATION_CLOSED","message":"Public workspace registration is disabled on this deployment. Set VELIX_PUBLIC_REGISTRATION=true to open it."}}';
+            }
+            proxy_pass http://velix;
+        }
+
+        # Upstream applies no throttle here: 80 wrong-password POSTs in a row all
+        # answer 401 with no backoff.
+        location = /v1/auth/login {
+            limit_req zone=velixauth burst=${VELIX_AUTH_BURST} nodelay;
+            proxy_pass http://velix;
+        }
+
+        location / {
+            proxy_pass http://velix;
+        }
+    }
+}
