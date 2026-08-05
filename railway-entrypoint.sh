@@ -82,6 +82,22 @@ done
 # --- 4. first-boot workspace ----------------------------------------------
 # Idempotent: a second boot gets CONFLICT from the unique constraint on the
 # workspace slug and leaves the existing workspace alone.
+# Upstream rejects a password that is not >=8 chars with an uppercase, a lowercase
+# and a digit, and it rejects it AFTER the request, so a weak value would show up
+# only as a 422 in the deploy log. Checked here so the message names the rule.
+password_ok() {
+    p="$1"
+    [ "${#p}" -ge 8 ] || return 1
+    case "$p" in *[A-Z]*) ;; *) return 1 ;; esac
+    case "$p" in *[a-z]*) ;; *) return 1 ;; esac
+    case "$p" in *[0-9]*) ;; *) return 1 ;; esac
+    return 0
+}
+if [ -n "${VELIX_ADMIN_PASSWORD:-}" ] && ! password_ok "$VELIX_ADMIN_PASSWORD"; then
+    log "ERROR: VELIX_ADMIN_PASSWORD must be at least 8 characters with an uppercase letter, a lowercase letter and a digit. Skipping workspace bootstrap; fix the variable and redeploy."
+    VELIX_ADMIN_PASSWORD=""
+fi
+
 if [ "$ready" = 1 ] && [ -n "${VELIX_ADMIN_PASSWORD:-}" ]; then
     body=$(printf '{"email":"%s","password":"%s","name":"%s","slug":"%s","workspace_name":"%s"}' \
         "${VELIX_ADMIN_EMAIL:-admin@velix.local}" "$VELIX_ADMIN_PASSWORD" \
