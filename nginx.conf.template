@@ -21,9 +21,14 @@ http {
     # internet. Keying a limiter on it would give the whole world one shared
     # bucket. Railway REPLACES any inbound X-Forwarded-For, so the header holds
     # the real client address and nothing a caller sends can forge it.
+    # Only the FIRST address in the header is the caller. Railway appends its own
+    # hop, and the appended part is not stable request to request, so keying on
+    # the whole header hands every retry a fresh bucket and the limiter never
+    # fires.
     map $http_x_forwarded_for $velix_client {
-        default $http_x_forwarded_for;
-        ''      $remote_addr;
+        ''             $remote_addr;
+        '~^([^,\s]+)'  $1;
+        default        $remote_addr;
     }
 
     proxy_http_version 1.1;
@@ -47,6 +52,9 @@ http {
     server {
         listen ${PORT} default_server;
         listen [::]:${PORT} default_server;
+
+        # Debug aid: the address the limiter keys on, as this container sees it.
+        add_header X-Velix-Client $velix_client always;
 
         # Workspace signup. Upstream has no switch for this — REGISTRATION_ENABLED
         # appears in no lookup in the binary — so the gate lives here. With it
