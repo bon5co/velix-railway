@@ -55,7 +55,6 @@ http {
 
         # Debug aid: the address the limiter keys on, as this container sees it.
         add_header X-Velix-Client $velix_client always;
-        add_header X-Velix-Xff "$http_x_forwarded_for" always;
 
         # Workspace signup. Upstream has no switch for this — REGISTRATION_ENABLED
         # appears in no lookup in the binary — so the gate lives here. With it
