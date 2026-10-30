@@ -1,5 +1,9 @@
 # velix-railway
 
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/velix-api-v100-or-self-hosted-whatsapp-r?referralCode=Z1xivh&utm_medium=integration&utm_source=template&utm_campaign=generic)
+
+**Deploy on Railway:** [Velix API template](https://railway.com/deploy/velix-api-v100-or-self-hosted-whatsapp-r?referralCode=Z1xivh&utm_medium=integration&utm_source=template&utm_campaign=generic)
+
 Wrapper image for running [Velix API](https://docs.dokploy.com/docs/templates/velix-api) — a
 self-hosted, multi-instance WhatsApp REST API — on [Railway](https://railway.com).
 
